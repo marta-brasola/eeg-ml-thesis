@@ -18,6 +18,7 @@ class LSTMModel(nn.Module):
         self.fc = nn.Linear(hidden_dim, output_dim)
 
     def forward(self, x):
+        # layer di attivazione 
         out, (hn, cn) = self.lstm1(x)
         
         out = self.dropout1(out)

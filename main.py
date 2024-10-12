@@ -18,19 +18,6 @@ from torch.utils.data import Dataset, Dataloader
  
 print(torch.cuda.is_available())
 
-class RNN(nn.Module):
-    ## struttura di alessandrini 
-    # lstm (None, window_size, 8)
-    # drop (None, window_size, 8)
-    # lstm (None, 8)
-    # drop (None, 8)
-    # dense (None, num_classes)
-    
-    def __init__(self):
-        pass
-    
-    def forward(self, x):
-        pass
 
 class EegDataset(Dataset):
     def __init__(self, data_mode: str, offset, split_len):
@@ -71,7 +58,7 @@ class EegDataset(Dataset):
     
     def _load_aless(self, index):
         # qui leggerei il dataset e ritornerei i dati X e y 
-        
+        # registrazione intera e ritorno il crop 
         pass
     
     def _load_milt(self, index):
@@ -80,6 +67,11 @@ class EegDataset(Dataset):
         pass
 
 def train():
+    # carico il dataloader 
+    
+    # cosa prende in pasto il modello? --> prendere un crop alla volta e poi la rnn lo processa in maniera sequenziale
+    
+     
     pass
 
 def test():
