@@ -1,7 +1,7 @@
 import torch 
 import torch.nn as nn
 from torch.autograd import Variable 
-
+import torch.nn.functional as F
 
 class LSTMModel(nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim, window_size, num_layers=1, dropout_prob=0.5):
@@ -29,21 +29,29 @@ class LSTMModel(nn.Module):
         
         out = self.fc(out)
         
+        # layer di attivazione 3 classi 
+        out = F.log_softmax(output, dim=1)
         return out
 
   
     
 if __name__ == '__main__':
     
-    input_dim = 10        
-    hidden_dim = 8        
-    output_dim = 3        
-    window_size = 20      
-    dropout_prob = 0.5    
+    # input_dim = 10        
+    # hidden_dim = 8        
+    # output_dim = 3        
+    # window_size = 20      
+    # dropout_prob = 0.5    
 
-    model = LSTMModel(input_dim, hidden_dim, output_dim, window_size, dropout_prob=dropout_prob)
+    # model = LSTMModel(input_dim, hidden_dim, output_dim, window_size, dropout_prob=dropout_prob)
 
-    x = torch.randn(32, window_size, input_dim)  # (batch_size=32, sequence_length=window_size, input_features=input_dim)
+    # x = torch.randn(32, window_size, input_dim)  # (batch_size=32, sequence_length=window_size, input_features=input_dim)
 
-    output = model(x)
-    print(output.shape)  
+    # output = model(x)
+    # print(output.shape)  
+    
+    import os
+    
+    path = f"{os.getcwd()}/output"
+    print(path)
+

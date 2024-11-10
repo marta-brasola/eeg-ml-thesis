@@ -17,10 +17,30 @@ import torch.optim as optim
 from torch.utils.data import Dataset, Dataloader
 from rnn_model import LSTMModel
 import numpy as np 
+import os
 from sklearn.preprocessing import StandardScaler
 
 print(torch.cuda.is_available())
 
+def reduce_matrix(A, V):
+  # (N, w, 16) → (N, 16, w) → ((N*16), w) → compute V
+  # (N, 16, w) * V → transpose again last dimensions
+  B = np.swapaxes(A, 1, 2)  # (N, 16, w)
+  C = B.reshape((-1, B.shape[2]))  # ((N*16), w)
+  if V is None:
+    L, V = pca_reduction(C, 5e-6, comp = 50)
+  B = C @ V  # ((N*16), p)
+  B = B.reshape((A.shape[0], A.shape[2], B.shape[1]))  # (N, 16, p)
+  return np.swapaxes(B, 1, 2), V  # B = (N, p, 16)
+
+def adjust_size(x, y):
+  # when flattening the data matrix on the first dimension, y must be made compatible
+  if len(x) == len(y): return y
+  factor = len(x) // len(y)
+  ynew = np.empty((len(x), 1))
+  for i in range(0, len(y)):
+    ynew[i * factor : (i + 1) * factor] = y[i]
+  return ynew
 
 class EegDataset(Dataset):
     def __init__(self, data_mode: str, offset, split_len):
@@ -40,19 +60,21 @@ class EegDataset(Dataset):
         # self.dataset_path = dataset_path
     
     
-    def __len__(self):
+    def __len__(self):  
+      # quanti soggetti carico con il batch 
         return self.split_len
     
     def __getitem__(self, index):
         
         if self.data_mode == "caueeg":
-            self._load_caueeg(index)
-            crop = self.create_dataset() # crop della registrazione
-            eeg_data  = self.pca(crop)  # passo i crop 
+
             
             return egg_data, label
         
         if self.data_mode == "aless":
+            self._load_caueeg(index) # la shape sarà la durata della registrazione per il numero di canali
+            crop = self.create_dataset() # crop della registrazione
+            eeg_data  = self.pca(crop)  # passo i crop 
             return self._load_aless(index)
         
         if self.data_mode == "milt":
@@ -138,23 +160,44 @@ class EegDataset(Dataset):
         
         pass
 
-def train(args, model, device, train_loader, optimizer, epoch):
-    # carico il dataloader 
-    
-    # cosa prende in pasto il modello? --> prendere un crop alla volta e poi la rnn lo processa in maniera sequenziale
-    model.train()
-    
-    for batch_idx, (data, target) in enumerate(train_loader):
-        # devo capire se mettere qui la pca o metterla direttametne nel data loader 
-             
-        data, target = data.to(device), target.to(device)
-        optimizer.zero_grad()
-        output = model(data)
-        loss = F.nll_loss(output, target)
-        loss.backward()
-        optimizer.step()
-        
 
+
+def calculate_accuracy(y_pred, y_true):
+  correct = (y_pred == y_true).sum().item()
+  return correct / y_true.size(0)
+
+def train(args, model, device, train_loader, optimizer, epoch):
+  
+  model.train()
+  
+  train_loss = 0.0
+  pred_list = []
+  gt_list = []
+  
+  
+  for batch_idx, (data, target) in enumerate(train_loader):
+    
+    data, target = data.to(device), target.to(device)
+    
+    optimizer.zero_grad()
+    output = model(data)
+    
+    loss = F.nll_loss(output, target)
+    loss.backward()
+    optimizer.step()
+    
+    _, y_pred = torch.max(output,1)
+    
+    pred_list.append(y_pred)
+    gt_list.append(y)
+    
+  pred_list = torch.cat(pred_list)
+  gt_list = torch.cat(gt_list)
+  
+  train_acc = calculate_accuracy(pred_list, gt_list) 
+  
+  return train_loss / len(train_loader), train_acc, pred_list, gt_list   
+      
 
 def test(model, device, test_loader):
     
@@ -174,18 +217,30 @@ def test(model, device, test_loader):
             
     test_loss /= len(test_loader.dataset)
     
-def save_model():
-    ##TODO funzione per salvare i parametri del modello durante le epoche 
-    
-    pass
+def save_model(model, optimzier, epoch):
 
-def calculate_metrics():
-    ##TODO definire una funzione per calcolare le metriche durante il training
-    # del modello così posso salvare il modello all'epoca migliore 
+  """
+  Function to save model states for epoch 
+  """
+  
+  model_name = model.__class__.name__
+  
+  model_dir = f"{os.getcwd()}/output/"
+  
+  path = os.path.join(model_dir, f"{model_name}") ##TODO identificare univicocamente il modello
+  
+  torch.save({
+    'epoch': epoch,
+    'model_state_dict': model.state_dict(),
+    'optimizer_state_dict': optimzier.state_dict()
+    # aggiungere il numero di parametri? 
+  }, path)
     
-    pass
+def save_history():
+  pass
 
 def main():
+  
     num_epochs = 20 
     device = torch.device("cuda")
     
@@ -199,8 +254,14 @@ def main():
     # scheduler = StepLR(optimizer, step_size=1)
     
     for epoch in range(1, num_epochs):
-        train(model=model, device=device, train_loader=train_loader, optimizer=optimizer, epoch=epoch)
-        test(model, device, val_loader)
+      
+        train_loss, train_acc, train_preds, train_gts = train(model=model, device=device, train_loader=train_loader, optimizer=optimizer, epoch=epoch)
+        val_loss, val_acc, val_preds, val_gts = test(model, device, val_loader)
 
+        save_model(model, optimizer, epoch)
+        
+        save_history()##TODO to save history while training 
+        
+        
 if __name__ == '__main__':
     main()
