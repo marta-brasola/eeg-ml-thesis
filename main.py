@@ -17,6 +17,8 @@ import torch.optim as optim
 from torch.utils.data import Dataset, Dataloader
 from rnn_model import LSTMModel
 import numpy as np 
+import datetime
+from torch.utils.tensorboard import SummaryWriter
 import os
 from sklearn.preprocessing import StandardScaler
 
@@ -160,13 +162,17 @@ class EegDataset(Dataset):
         
         pass
 
-
-
 def calculate_accuracy(y_pred, y_true):
+  
   correct = (y_pred == y_true).sum().item()
+  
   return correct / y_true.size(0)
 
 def train(args, model, device, train_loader, optimizer, epoch):
+  
+  """
+  Define Training Step
+  """
   
   model.train()
   
@@ -189,7 +195,7 @@ def train(args, model, device, train_loader, optimizer, epoch):
     _, y_pred = torch.max(output,1)
     
     pred_list.append(y_pred)
-    gt_list.append(y)
+    gt_list.append(target)
     
   pred_list = torch.cat(pred_list)
   gt_list = torch.cat(gt_list)
@@ -199,23 +205,41 @@ def train(args, model, device, train_loader, optimizer, epoch):
   return train_loss / len(train_loader), train_acc, pred_list, gt_list   
       
 
-def test(model, device, test_loader):
+def validation(model, device, test_loader):
+  
+  """
+  Define Validation Step
+  """
     
-    model.eval()
+  model.eval()
+  
+  val_loss = 0 
+  correct = 0 
+  
+  pred_list = []
+  gt_list = []
+  
+  with torch.no_grad():
     
-    test_loss = 0 
-    correct = 0 
-    
-    with torch.no_grad():
-        for data, target in test_loader:
-            
-            data, target = data.to(device), target.to(device)
-            output = model(data)
-            test_loss += F.nll_loss(output, target, reduction='sum').item()
-            pred = output.argmax(dim=1, keepdim=True)
-            correct += pred.eq(target.view_as(pred)).sum().item()
-            
-    test_loss /= len(test_loader.dataset)
+    for data, target in test_loader:
+        
+      data, target = data.to(device), target.to(device)
+      output = model(data)
+      val_loss += F.nll_loss(output, target, reduction='sum').item()
+      pred = output.argmax(dim=1, keepdim=True)
+      
+      pred_list.append(pred)
+      gt_list.append(target)
+      # correct += pred.eq(target.view_as(pred)).sum().item()
+      
+  pred_list = torch.cat(pred_list)
+  gt_list = torch.cat(gt_list)
+           
+  val_acc = calculate_accuracy(pred_list, gt_list)
+  
+  val_loss /= len(test_loader.dataset)
+  
+  return val_loss, val_acc, pred_list, gt_list 
     
 def save_model(model, optimzier, epoch):
 
@@ -227,7 +251,9 @@ def save_model(model, optimzier, epoch):
   
   model_dir = f"{os.getcwd()}/output/"
   
-  path = os.path.join(model_dir, f"{model_name}") ##TODO identificare univicocamente il modello
+  now = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+  
+  path = os.path.join(model_dir, f"{model_name}_{now}") 
   
   torch.save({
     'epoch': epoch,
@@ -236,32 +262,36 @@ def save_model(model, optimzier, epoch):
     # aggiungere il numero di parametri? 
   }, path)
     
-def save_history():
-  pass
-
+    
 def main():
   
-    num_epochs = 20 
-    device = torch.device("cuda")
-    
-    train_loader = EegDataset()
-    val_loader = EegDataset()
-    test_loader = EegDataset()
-    
-    model = LSTMModel.to(device)
-    
-    optimizer = optim.adam(model.parameters)
-    # scheduler = StepLR(optimizer, step_size=1)
-    
-    for epoch in range(1, num_epochs):
-      
-        train_loss, train_acc, train_preds, train_gts = train(model=model, device=device, train_loader=train_loader, optimizer=optimizer, epoch=epoch)
-        val_loss, val_acc, val_preds, val_gts = test(model, device, val_loader)
+  writer = SummaryWriter()
 
-        save_model(model, optimizer, epoch)
-        
-        save_history()##TODO to save history while training 
+  num_epochs = 20 
+  device = torch.device("cuda")
+  
+  train_loader = EegDataset()
+  val_loader = EegDataset()
+  test_loader = EegDataset()
+  
+  model = LSTMModel.to(device)
+  
+  optimizer = optim.adam(model.parameters)
+  # scheduler = StepLR(optimizer, step_size=1)
+  
+  for epoch in range(1, num_epochs):
+  
+    train_loss, train_acc, train_preds, train_gts = train(model=model, device=device, train_loader=train_loader, optimizer=optimizer, epoch=epoch)
+    val_loss, val_acc, val_preds, val_gts = validation(model, device, val_loader)
+    
+    save_model(model, optimizer, epoch)
+    
+    writer.add_scalar('Loss/train', train_loss, epoch)
+    writer.add_scalar('Loss/validation', val_loss, epoch)
+    writer.add_scalar('Accuracy/train', train_acc, epoch)
+    writer.add_scalar('Accuracy/validation', val_acc, epoch)
+    ##TODO calculate also the confusion matrix
         
         
 if __name__ == '__main__':
-    main()
+  main()
