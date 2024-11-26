@@ -30,7 +30,8 @@ class LSTMModel(nn.Module):
         out = self.fc(out)
         
         # layer di attivazione 3 classi 
-        out = F.log_softmax(out, dim=1)
+        out = F.log_softmax(out, dim=1) ##TODO uso la loss CatgoricalCross entropy 
+        
         return out
 
   
