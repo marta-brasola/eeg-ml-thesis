@@ -15,69 +15,22 @@ import torch
 import torch.nn as nn 
 import torch.nn.functional as F
 import torch.optim as optim 
-from torch.utils.data import Dataset, Dataloader
+# from torch.utils.data import Dataset, Dataloader
 from rnn_model import LSTMModel
+from torch.utils.data import DataLoader
 import numpy as np 
 import datetime
 from torch.utils.tensorboard import SummaryWriter
 import os
-from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 import r_pca
 import scipy.io 
+from datasets import EegDataset
+import matplotlib.pyplot as plt
+import random
 
 
 print(torch.cuda.is_available())
-
-def pca_reduction(A, tol, comp = 0):
-  assert(len(A.shape) == 2)
-  dmin = min(A.shape)
-  if rpca:
-    r = r_pca.R_pca(A, mu = rpca_mu)
-    print('Auto tol:', 1e-7 * r.frobenius_norm(r.D), 'used tol:', tol)
-    print('mu', r.mu, 'lambda', r.lmbda)
-    L, S = r.fit(tol = tol, max_iter = 10, iter_print = 1)
-    global norm_s
-    norm_s = np.linalg.norm(S, ord='fro')  # for debug
-    print('||A,L,S||:', np.linalg.norm(A, ord='fro'), np.linalg.norm(L, ord='fro'), np.linalg.norm(S, ord='fro'))
-    #np.savez_compressed('rpca.npz', pre = A, post = L)
-  elif multiscale_pca:
-    print('MSPCA...')
-    #ms = mspca.MultiscalePCA()
-    #L = ms.fit_transform(A, wavelet_func='sym4', threshold=0.1, scale = True )
-    print('saving MAT file and calling Matlab...')
-    scipy.io.savemat('mspca.mat', {'A': A}, do_compression = True)
-    os.system('matlab -batch "mspca(\'mspca.mat\')"')
-    L = scipy.io.loadmat('mspca.mat')['L'] 
-  else:
-    L = A
-  U, lam, V = np.linalg.svd(L, full_matrices = False)  # V is transposed
-  assert(U.shape == (A.shape[0], dmin) and lam.shape == (dmin,) and V.shape == (dmin, A.shape[1]))
-  #np.savetxt('singular_values.csv', lam)
-  lam_trunc = lam[lam > 0.015 * lam[0]]  # magic number
-  p = comp if comp else len(lam_trunc)
-  assert(p <= dmin)
-  print('PCA truncation', dmin, '->', p)
-  return L, V.T[:,:p]
-
-def reduce_matrix(A, V):
-  # (N, w, 16) → (N, 16, w) → ((N*16), w) → compute V
-  # (N, 16, w) * V → transpose again last dimensions
-  B = np.swapaxes(A, 1, 2)  # (N, 16, w)
-  C = B.reshape((-1, B.shape[2]))  # ((N*16), w)
-  if V is None:
-    L, V = pca_reduction(C, 5e-6, comp = 50)
-  B = C @ V  # ((N*16), p)
-  B = B.reshape((A.shape[0], A.shape[2], B.shape[1]))  # (N, 16, p)
-  return np.swapaxes(B, 1, 2), V  # B = (N, p, 16)
-
-def adjust_size(x, y):
-  # when flattening the data matrix on the first dimension, y must be made compatible
-  if len(x) == len(y): return y
-  factor = len(x) // len(y)
-  ynew = np.empty((len(x), 1))
-  for i in range(0, len(y)):
-    ynew[i * factor : (i + 1) * factor] = y[i]
-  return ynew
 
 def calculate_accuracy(y_pred, y_true):
   
@@ -85,7 +38,7 @@ def calculate_accuracy(y_pred, y_true):
   
   return correct / y_true.size(0)
 
-def train(args, model, device, train_loader, optimizer, epoch):
+def train(model, device, train_loader, optimizer, epoch):
   
   """
   Define Training Step
@@ -105,7 +58,8 @@ def train(args, model, device, train_loader, optimizer, epoch):
     optimizer.zero_grad()
     output = model(data)
     
-    loss = F.nll_loss(output, target)
+    loss = nn.CrossEntropyLoss(output, target)
+    train_loss += loss.item()
     loss.backward()
     optimizer.step()
     
@@ -142,7 +96,8 @@ def validation(model, device, test_loader):
         
       data, target = data.to(device), target.to(device)
       output = model(data)
-      val_loss += F.nll_loss(output, target, reduction='sum').item()
+      loss = nn.CrossEntropyLoss(output, target)
+      val_loss += loss.item()
       pred = output.argmax(dim=1, keepdim=True)
       
       pred_list.append(pred)
@@ -185,22 +140,98 @@ def save_model(model, optimzier, epoch):
     'optimizer_state_dict': optimzier.state_dict()
     # aggiungere il numero di parametri? 
   }, path)
+
+def test_and_save_confusion_matrix(model, device, loader):
+    model.eval()
+    all_targets = []
+    all_predictions = []
     
+    with torch.no_grad():
+        for inputs, targets in loader:
+            inputs, targets = inputs.to(device), targets.to(device)
+            outputs = model(inputs)
+            _, predicted = outputs.max(1)
+            all_targets.extend(targets.cpu().numpy())
+            all_predictions.extend(predicted.cpu().numpy())
+    
+    # Compute confusion matrix
+    cm = confusion_matrix(all_targets, all_predictions)
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=np.arange(10))
+    
+    # Plot and save confusion matrix
+    disp.plot(cmap='viridis')
+    plt.title('Confusion Matrix')
+    plt.savefig('output/confusion_matrix.png')
+    plt.show()   
     
 def main():
   
   writer = SummaryWriter()
 
   num_epochs = 20 
+  batch_size = 1
   device = torch.device("cuda")
   
-  train_loader = EegDataset()
-  val_loader = EegDataset()
-  test_loader = EegDataset()
+  ## CREATE DATASET FOR ALESSANDRINI 
+  ##TODO refactor the code
+  subj_list = (
+      tuple((f'{i:02d}', 'N') for i in range(1, 16)) +  # Normal subjects, S01 to S15
+      tuple((f'{i:02d}', 'AD') for i in range(1, 21))   # Alzheimer's subjects, S01 to S20
+  )
+
+  subjs_test = (0, 1, 15, 16, 17)  
+  test_subject_list = [subj_list[i] for i in subjs_test]
+
+  train_val_subjects = [subj for i, subj in enumerate(subj_list) if i not in subjs_test]
+
+  normal_subjects = [subj for subj in train_val_subjects if subj[1] == 'N']
+  ad_subjects = [subj for subj in train_val_subjects if subj[1] == 'AD']
+
+  random.seed(42)  
+  random.shuffle(normal_subjects)
+  random.shuffle(ad_subjects)
+
+  split_index_normal = int(0.8 * len(normal_subjects))
+  split_index_ad = int(0.8 * len(ad_subjects))
+
+  train_normal = normal_subjects[:split_index_normal]
+  val_normal = normal_subjects[split_index_normal:]
+
+  train_ad = ad_subjects[:split_index_ad]
+  val_ad = ad_subjects[split_index_ad:]
+
+  train_subject_list = train_normal + train_ad
+  val_subject_list = val_normal + val_ad
+
+  random.shuffle(train_subject_list)
+  random.shuffle(val_subject_list)
   
-  model = LSTMModel.to(device)
+  ## DATASET PARAMETERS 
+  dataset_dir = '/home/marta/Documenti/eeg_rnn_repo/rnn-eeg-ad/eeg2'
+  data_mode = 'aless'
+  window = 256
+  overlap = 25
   
-  optimizer = optim.adam(model.parameters)
+  train_dataset = EegDataset(train_subject_list, dataset_dir, data_mode, window, overlap)
+  val_dataset = EegDataset(val_subject_list, dataset_dir, data_mode, window, overlap)
+  test_dataset = EegDataset(test_subject_list, dataset_dir, data_mode, window, overlap)
+
+  train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+  val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True)
+  test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
+  
+  
+  ## MODEL CONFIGURATIONS
+  input_dim = 16        
+  hidden_dim = 8        
+  output_dim = 2    
+  window_size = 20      
+  dropout_prob = 0.5    
+  model = LSTMModel(input_dim, hidden_dim, output_dim, window_size, dropout_prob=dropout_prob)
+  
+  model = model.to(device)
+  
+  optimizer = optim.Adam(model.parameters(), lr=0.001)
   # scheduler = StepLR(optimizer, step_size=1)
   
   for epoch in range(1, num_epochs):
@@ -214,13 +245,9 @@ def main():
     writer.add_scalar('Loss/validation', val_loss, epoch)
     writer.add_scalar('Accuracy/train', train_acc, epoch)
     writer.add_scalar('Accuracy/validation', val_acc, epoch)
-    ##TODO calculate also the confusion matrix calcolare solo alla fine quella di sklearn  
         
-        
+  test_and_save_confusion_matrix(model, device, test_loader) 
+       
 if __name__ == '__main__':
-  
-  rpca = False
-  rpca_mu = 0
-  multiscale_pca = False 
   
   main()

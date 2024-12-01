@@ -7,6 +7,7 @@ class LSTMModel(nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim, window_size, num_layers=1, dropout_prob=0.5):
         super(LSTMModel, self).__init__()
         
+        ##TODO aggiungere un layer di flatten per processare la sequenza in maniera temporale 
         self.lstm1 = nn.LSTM(input_dim, hidden_dim, num_layers=num_layers, batch_first=True)
         
         self.dropout1 = nn.Dropout(dropout_prob)
@@ -18,7 +19,11 @@ class LSTMModel(nn.Module):
         self.fc = nn.Linear(hidden_dim, output_dim)
 
     def forward(self, x):
-        # layer di attivazione 
+        # layer di attivazione
+        print(f"input shape before LSTM: {x.shape}")
+        
+        # x = x.squeeze(0)  
+        print(f"input shape after removing batch dimension: {x.shape}")
         out, (hn, cn) = self.lstm1(x)
         
         out = self.dropout1(out)
@@ -29,8 +34,7 @@ class LSTMModel(nn.Module):
         
         out = self.fc(out)
         
-        # layer di attivazione 3 classi 
-        out = F.log_softmax(out, dim=1) ##TODO uso la loss CatgoricalCross entropy 
+        # out = F.log_softmax(out, dim=1) uso la loss cross entropy
         
         return out
 
