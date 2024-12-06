@@ -23,6 +23,9 @@ import datetime
 from torch.utils.tensorboard import SummaryWriter
 import os
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+from sklearn.model_selection import train_test_split
+from torch.utils.data import DataLoader, Subset
+from custom_window import create_dataset
 import r_pca
 import scipy.io 
 from datasets import EegDataset
@@ -164,6 +167,14 @@ def test_and_save_confusion_matrix(model, device, loader):
     plt.savefig('output/confusion_matrix.png')
     plt.show()   
     
+def split_train_val(dataset, test_size=0.2, random_state=42):
+    train_indices, val_indices = train_test_split(
+        range(len(dataset.crops_index)), 
+        test_size=test_size,
+        random_state=random_state
+    )
+    return train_indices, val_indices 
+    
 def main():
   
   writer = SummaryWriter()
@@ -173,52 +184,47 @@ def main():
   device = torch.device("cuda")
   
   ## CREATE DATASET FOR ALESSANDRINI 
-  ##TODO refactor the code
   subj_list = (
-      tuple((f'{i:02d}', 'N') for i in range(1, 16)) +  # Normal subjects, S01 to S15
-      tuple((f'{i:02d}', 'AD') for i in range(1, 21))   # Alzheimer's subjects, S01 to S20
+      tuple((f'{i:02d}', 'N') for i in range(1, 16)) +  # normal subjects, S01 to S15
+      tuple((f'{i:02d}', 'AD') for i in range(1, 21))   # alzheimer's subjects, S01 to S20
   )
 
   subjs_test = (0, 1, 15, 16, 17)  
+
   test_subject_list = [subj_list[i] for i in subjs_test]
-
-  train_val_subjects = [subj for i, subj in enumerate(subj_list) if i not in subjs_test]
-
-  normal_subjects = [subj for subj in train_val_subjects if subj[1] == 'N']
-  ad_subjects = [subj for subj in train_val_subjects if subj[1] == 'AD']
-
-  random.seed(42)  
-  random.shuffle(normal_subjects)
-  random.shuffle(ad_subjects)
-
-  split_index_normal = int(0.8 * len(normal_subjects))
-  split_index_ad = int(0.8 * len(ad_subjects))
-
-  train_normal = normal_subjects[:split_index_normal]
-  val_normal = normal_subjects[split_index_normal:]
-
-  train_ad = ad_subjects[:split_index_ad]
-  val_ad = ad_subjects[split_index_ad:]
-
-  train_subject_list = train_normal + train_ad
-  val_subject_list = val_normal + val_ad
-
-  random.shuffle(train_subject_list)
-  random.shuffle(val_subject_list)
+  train_val_subjects = [subj for i, subj in enumerate(subj_list) if i not in subjs_test]   
+      
+  dataset = EegDataset(file_paths=train_val_subjects,
+                      create_dataset_crop=create_dataset,
+                      window=128,
+                      overlap=25)
   
+  test_dataset = EegDataset(file_paths=test_subject_list,
+                      create_dataset_crop=create_dataset,
+                      window=128,
+                      overlap=25)
+  
+  train_indices, val_indices = split_train_val(dataset, test_size=0.2)
+
+
+  train_loader = DataLoader(Subset(dataset, train_indices), batch_size=32, shuffle=True)
+  val_loader = DataLoader(Subset(dataset, val_indices), batch_size=32, shuffle=True)
+  
+  test_loader = DataLoader(test_dataset, batch_size = 32)
+
   ## DATASET PARAMETERS 
-  dataset_dir = '/home/marta/Documenti/eeg_rnn_repo/rnn-eeg-ad/eeg2'
-  data_mode = 'aless'
-  window = 256
-  overlap = 25
+  # dataset_dir = '/home/marta/Documenti/eeg_rnn_repo/rnn-eeg-ad/eeg2'
+  # data_mode = 'aless'
+  # window = 256
+  # overlap = 25
   
-  train_dataset = EegDataset(train_subject_list, dataset_dir, data_mode, window, overlap)
-  val_dataset = EegDataset(val_subject_list, dataset_dir, data_mode, window, overlap)
-  test_dataset = EegDataset(test_subject_list, dataset_dir, data_mode, window, overlap)
+  # train_dataset = EegDataset(train_subject_list, dataset_dir, data_mode, window, overlap)
+  # val_dataset = EegDataset(val_subject_list, dataset_dir, data_mode, window, overlap)
+  # test_dataset = EegDataset(test_subject_list, dataset_dir, data_mode, window, overlap)
 
-  train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-  val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True)
-  test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
+  # train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+  # val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True)
+  # test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
   
   
   ## MODEL CONFIGURATIONS
