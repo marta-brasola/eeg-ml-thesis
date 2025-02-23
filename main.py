@@ -10,7 +10,7 @@
         # optimzier adam
         # rmsprop
     # testing del modello 
-    
+from tqdm import tqdm
 import torch 
 import torch.nn as nn 
 import torch.nn.functional as F
@@ -42,6 +42,7 @@ def calculate_accuracy(y_pred, y_true):
   return correct / y_true.size(0)
 
 def train(model, device, train_loader, optimizer, epoch):
+  print("starting training loop")
   
   """
   Define Training Step
@@ -54,14 +55,29 @@ def train(model, device, train_loader, optimizer, epoch):
   gt_list = []
   
   
-  for batch_idx, (data, target) in enumerate(train_loader):
+  for batch_idx, (data, target) in enumerate(tqdm(train_loader)):
+    # print("type")
+    # print(data.dtype)
+    # print(type(data))
+    # print(target.dtype)
+    # print(type(target))
     
     data, target = data.to(device), target.to(device)
     
     optimizer.zero_grad()
     output = model(data)
     
-    loss = nn.CrossEntropyLoss(output, target)
+    # print(output.shape)
+    # print(target.shape)
+    # print("confronto output target")
+    # print(output)
+    # print(target)
+    target = target.squeeze()
+    # print("dopo reshape")
+    # print(target.shape)
+    
+    criterion = nn.CrossEntropyLoss()
+    loss = criterion(output, target)
     train_loss += loss.item()
     loss.backward()
     optimizer.step()
@@ -75,11 +91,12 @@ def train(model, device, train_loader, optimizer, epoch):
   gt_list = torch.cat(gt_list)
   
   train_acc = calculate_accuracy(pred_list, gt_list) 
-  
+  print("ended training step")
   return train_loss / len(train_loader), train_acc, pred_list, gt_list   
       
 
 def validation(model, device, test_loader):
+  print("starting validation step")
   
   """
   Define Validation Step
@@ -179,7 +196,7 @@ def main():
   
   writer = SummaryWriter()
 
-  num_epochs = 20 
+  num_epochs = 2 
   batch_size = 1
   device = torch.device("cuda")
   
@@ -241,9 +258,15 @@ def main():
   # scheduler = StepLR(optimizer, step_size=1)
   
   for epoch in range(1, num_epochs):
-  
+    print(f"Processing epoch number: {epoch}")
+
+    print("started training")
     train_loss, train_acc, train_preds, train_gts = train(model=model, device=device, train_loader=train_loader, optimizer=optimizer, epoch=epoch)
+    print("finished training")
+
+    print("starting validation")
     val_loss, val_acc, val_preds, val_gts = validation(model, device, val_loader)
+    print("finished validation")
     
     save_model(model, optimizer, epoch)
     

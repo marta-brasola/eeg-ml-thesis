@@ -43,7 +43,7 @@ def pca_reduction(A, tol, comp = 0):
   lam_trunc = lam[lam > 0.015 * lam[0]]  # magic number
   p = comp if comp else len(lam_trunc)
   assert(p <= dmin)
-  print('PCA truncation', dmin, '->', p)
+  # print('PCA truncation', dmin, '->', p)
   return L, V.T[:,:p]
 
 def reduce_matrix(A, V):
@@ -114,7 +114,7 @@ class EegDataset(Dataset):
         crop = x_data_reduced[crop_idx]
         label = labels[0] 
         
-        label = torch.tensor(label).float().squeeze().unsqueeze(0)        
+        label = torch.tensor(label).long().squeeze().unsqueeze(0)        
         # label = self.labels[file_idx]
         
         return torch.tensor(crop).float(), label

@@ -20,10 +20,8 @@ class LSTMModel(nn.Module):
 
     def forward(self, x):
         # layer di attivazione
-        print(f"input shape before LSTM: {x.shape}")
         
         # x = x.squeeze(0)  
-        print(f"input shape after removing batch dimension: {x.shape}")
         out, (hn, cn) = self.lstm1(x)
         
         out = self.dropout1(out)

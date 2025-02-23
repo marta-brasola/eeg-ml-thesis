@@ -1,4 +1,7 @@
 .venv/
+alessandrini-test/
+alessandrini-train/
+output/
 runs/
 __pycache__/
 
