@@ -1,7 +1,8 @@
 .venv/
 alessandrini-test/
 alessandrini-train/
-
+miltiadous-test/
+miltiadous-train/
 runs/
 __pycache__/
 
