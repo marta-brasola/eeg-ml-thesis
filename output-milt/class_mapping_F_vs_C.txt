@@ -1,0 +1,2 @@
+Task: F_vs_C
+Class mapping: {'F': 0, 'C': 1}
