@@ -140,7 +140,7 @@ def validation(model, device, val_loader):
   val_acc = calculate_accuracy(pred_list, gt_list)
   
   
-  return val_loss / len(val_loader.dataset), val_acc, pred_list, gt_list 
+  return val_loss / len(val_loader), val_acc, pred_list, gt_list 
  
 def test_and_save_confusion_matrix(model, device, loader, file_name):
     model.eval()
@@ -272,7 +272,7 @@ if __name__ == '__main__':
     SEED = args.seed
     # OVERLAP = 0
     PCA_COMPONENTS = 50
-    num_epochs = 20
+    num_epochs = 2
     print(f"window: {WINDOW}")
     print(f"overlap: {OVERLAP}")
     print(f"number pca components: {PCA_COMPONENTS}")
@@ -297,11 +297,17 @@ if __name__ == '__main__':
     for batch_x, batch_y in train_loader:
         print(batch_x.shape, batch_y.shape)
         break 
-
+    
+    class_groups = {
+        "A_vs_C": 2,
+        "A_vs_F": 2,
+        "F_vs_C": 2,
+        "A_vs_F_vs_C": 3
+    }    
     # call model and training
     input_dim = 19        
     hidden_dim = 8        
-    output_dim = 2    
+    output_dim = class_groups[TASK]   
     window_size = 20      
     dropout_prob = 0.5 
     device = torch.device("cuda")
