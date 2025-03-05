@@ -162,6 +162,9 @@ def test_and_save_confusion_matrix(model, device, loader, file_name):
     test_acc = calculate_accuracy(pred_list, gt_list)
     print(f"Test Accuracy: {test_acc:.4f}")   
     gt_list, pred_list = gt_list.cpu().numpy(), pred_list.cpu().numpy()
+    print(np.unique(gt_list))
+    print(np.unique(pred_list))
+
     # Compute confusion matrix
     cm = confusion_matrix(gt_list, pred_list)
     report_dict = classification_report(gt_list, pred_list, output_dict=True)
@@ -258,7 +261,7 @@ if __name__ == '__main__':
 
     parser.add_argument("--window", type=int, default=1000, help="Window size (default: 1000)")
     parser.add_argument("--percentage_overlap", type=int, default=4, help="Percentage of overlap (default: 0.25)")
-    parser.add_argument("--task", type=str, default="A_vs_C", help="Task name (default: 'A_vs_C')")
+    parser.add_argument("--task", type=str, default="A_vs_F_vs_C", help="Task name (default: 'A_vs_C')")
     parser.add_argument("--pca_components", type=int, default=50, help="Number of PCA components (default: 50)")
     parser.add_argument("--seed", type=int, default=42, help="Set seed for reproducibilty")
     args = parser.parse_args()
@@ -272,7 +275,7 @@ if __name__ == '__main__':
     SEED = args.seed
     # OVERLAP = 0
     PCA_COMPONENTS = 50
-    num_epochs = 2
+    num_epochs = 20
     print(f"window: {WINDOW}")
     print(f"overlap: {OVERLAP}")
     print(f"number pca components: {PCA_COMPONENTS}")
