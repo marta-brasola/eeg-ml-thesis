@@ -142,7 +142,7 @@ def validation(model, device, val_loader):
   
   return val_loss / len(val_loader.dataset), val_acc, pred_list, gt_list 
  
-def test_and_save_confusion_matrix(model, device, loader,cm_name):
+def test_and_save_confusion_matrix(model, device, loader, file_name):
     model.eval()
     gt_list = []
     pred_list = []
@@ -161,16 +161,21 @@ def test_and_save_confusion_matrix(model, device, loader,cm_name):
       
     test_acc = calculate_accuracy(pred_list, gt_list)
     print(f"Test Accuracy: {test_acc:.4f}")   
-    print(classification_report(gt_list, pred_list))
+    gt_list, pred_list = gt_list.cpu().numpy(), pred_list.cpu().numpy()
     # Compute confusion matrix
-    cm = confusion_matrix(gt_list.cpu().numpy(), pred_list.cpu().numpy())
+    cm = confusion_matrix(gt_list, pred_list)
+    report_dict = classification_report(gt_list, pred_list, output_dict=True)
+    print(report_dict)
+    report_df = pd.DataFrame(report_dict).transpose()
+
+    report_df.to_csv(f"output-milt/report_{file_name}", index=True)
     num_classes = cm.shape[0]
     disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=np.arange(num_classes))
 
     # Plot and save confusion matrix
     disp.plot(cmap='Blues')
     plt.title('Confusion Matrix')
-    plt.savefig(f'output-milt/{cm_name}')
+    plt.savefig(f'output-milt/cm_{file_name}.png')
     plt.show()   
 
 def seed_everything(seed: int) -> None:
@@ -221,8 +226,34 @@ class PrecomputedPCAEeGDataset(Dataset):
 
         return x_data, y_data
     
+def plot_training_history(history, file_name):
 
-if __name__ == 'main':
+    epochs = range(1, len(history['train_loss']) + 1)
+    
+    plt.figure(figsize=(12, 5))
+    
+    plt.subplot(1, 2, 1)
+    plt.plot(epochs, history['train_acc'], 'bo-', label='Training Accuracy')
+    plt.plot(epochs, history['val_acc'], 'r*-', label='Validation Accuracy')
+    plt.xlabel('Epochs')
+    plt.ylabel('Accuracy')
+    plt.title('Training vs Validation Accuracy')
+    plt.legend()
+    
+    plt.subplot(1, 2, 2)
+    plt.plot(epochs, history['train_loss'], 'bo-', label='Training Loss')
+    plt.plot(epochs, history['val_loss'], 'r*-', label='Validation Loss')
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss')
+    plt.title('Training vs Validation Loss')
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(f"output-milt/history_{file_name}")
+    plt.show()
+
+
+if __name__ == '__main__':
+    print("Training Started")
     parser = argparse.ArgumentParser(description="Parse input arguments for the script.")
 
     parser.add_argument("--window", type=int, default=1000, help="Window size (default: 1000)")
@@ -315,8 +346,9 @@ if __name__ == 'main':
     # Save training history
     history_name = file_name + ".npy"
     history_file = os.path.join(os.getcwd(), "output-milt", history_name)
+    plot_training_history(history, file_name)
     np.save(history_file, history)
 
     print(f"\nTraining history saved at {history_file}")
     cm_name = file_name + ".png"
-    test_and_save_confusion_matrix(model, device, test_loader, cm_name = cm_name)
+    test_and_save_confusion_matrix(model, device, test_loader, file_name )
