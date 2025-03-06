@@ -179,7 +179,7 @@ def test_and_save_confusion_matrix(model, device, loader, file_name):
     disp.plot(cmap='Blues')
     plt.title('Confusion Matrix')
     plt.savefig(f'output-milt/cm_{file_name}.png')
-    plt.show()   
+    #plt.show()   
 
 def seed_everything(seed: int) -> None:
     """
@@ -252,7 +252,7 @@ def plot_training_history(history, file_name):
     plt.legend()
     plt.tight_layout()
     plt.savefig(f"output-milt/history_{file_name}")
-    plt.show()
+    #plt.show()
 
 
 if __name__ == '__main__':
@@ -275,10 +275,11 @@ if __name__ == '__main__':
     SEED = args.seed
     # OVERLAP = 0
     PCA_COMPONENTS = 50
-    num_epochs = 20
+    num_epochs = 40
     print(f"window: {WINDOW}")
     print(f"overlap: {OVERLAP}")
     print(f"number pca components: {PCA_COMPONENTS}")
+    print(f"task: {TASK}")
 
     seed_everything(SEED)
 

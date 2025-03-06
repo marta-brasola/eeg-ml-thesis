@@ -225,14 +225,15 @@ if __name__ == '__main__':
 
     WINDOW = args.window
     PERCENTAGE_OVERLAP = args.percentage_overlap
-    OVERLAP = WINDOW // PERCENTAGE_OVERLAP
+    # OVERLAP = WINDOW // PERCENTAGE_OVERLAP
     TASK = args.task
-    # OVERLAP = 0
+    OVERLAP = 0
     PCA_COMPONENTS = args.pca_components
     # Assign parsed values to variables
 
     print(f"WINDOW: {WINDOW}")
     print(f"PERCENTAGE_OVERLAP: {PERCENTAGE_OVERLAP}")
+    print(f"overlap: {OVERLAP}")
     print(f"TASK: {TASK}")
     print(f"PCA_COMPONENTS: {PCA_COMPONENTS}")
 
