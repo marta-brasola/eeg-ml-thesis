@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 import pandas as pd 
 import random
 from sklearn.metrics import classification_report
+from simple_cnn_1d import TinyCNN1D
 import argparse 
 
 class LSTMModel(nn.Module):
@@ -81,7 +82,8 @@ def train(model, device, train_loader, optimizer, epoch):
     data, target = data.to(device), target.to(device)
     
     optimizer.zero_grad()
-    output = model(data)
+    age = None
+    output = model(data, age)
     
 
     target = target.squeeze().long()
@@ -125,7 +127,8 @@ def validation(model, device, val_loader):
     for data, target in val_loader:
         
       data, target = data.to(device), target.to(device).squeeze().long()
-      output = model(data)
+      age = None
+      output = model(data, age)
       loss = criterion(output, target)
       val_loss += loss.item()
       _, y_pred = torch.max(output,1)
@@ -150,7 +153,8 @@ def test_and_save_confusion_matrix(model, device, loader, file_name):
     with torch.no_grad():
         for data, target in loader:
             data, target = data.to(device).to(torch.float32), target.to(device).squeeze().long()
-            output = model(data).float()
+            age = None
+            output = model(data, age).float()
             _, y_pred = torch.max(output, 1)  
             
             pred_list.append(y_pred)
@@ -171,14 +175,14 @@ def test_and_save_confusion_matrix(model, device, loader, file_name):
     print(report_dict)
     report_df = pd.DataFrame(report_dict).transpose()
 
-    report_df.to_csv(f"output-milt/report_{file_name}", index=True)
+    report_df.to_csv(f"output-caueeg/report_{file_name}", index=True)
     num_classes = cm.shape[0]
     disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=np.arange(num_classes))
 
     # Plot and save confusion matrix
     disp.plot(cmap='Blues')
     plt.title('Confusion Matrix')
-    plt.savefig(f'output-milt/cm_{file_name}.png')
+    plt.savefig(f'output-caueeg/cm_{file_name}.png')
     #plt.show()   
 
 def seed_everything(seed: int) -> None:
@@ -251,7 +255,7 @@ def plot_training_history(history, file_name):
     plt.title('Training vs Validation Loss')
     plt.legend()
     plt.tight_layout()
-    plt.savefig(f"output-milt/history_{file_name}")
+    plt.savefig(f"output-caueeg/history_{file_name}")
     #plt.show()
 
 
@@ -286,6 +290,9 @@ if __name__ == '__main__':
     test_pca_path = os.path.join(base_path, f"test_w{WINDOW}_ovr{OVERLAP}_pca{PCA_COMPONENTS}_{TASK}")
     train_pca_path = os.path.join(base_path, f"train_w{WINDOW}_ovr{OVERLAP}_pca{PCA_COMPONENTS}_{TASK}")
 
+    #test_pca_path = os.path.join(base_path, f"test_w{WINDOW}_ovr{OVERLAP}_{TASK}")
+    #train_pca_path = os.path.join(base_path, f"train_w{WINDOW}_ovr{OVERLAP}_{TASK}")
+
     train_config = f"config/train_w{WINDOW}_ovr{OVERLAP}_{TASK}.csv"
     test_config = f"config/test_w{WINDOW}_ovr{OVERLAP}_{TASK}.csv"
 
@@ -315,9 +322,10 @@ if __name__ == '__main__':
     window_size = 20      
     dropout_prob = 0.5 
     device = torch.device("cuda")
-    model = LSTMModel(input_dim, hidden_dim, output_dim, dropout_prob=dropout_prob, use_dense1=False)
+    #model = LSTMModel(input_dim, hidden_dim, output_dim, dropout_prob=dropout_prob, use_dense1=False)
+    model = TinyCNN1D(in_channels=50, out_dims=output_dim, fc_stages=5, seq_length=19, use_age="no", base_channels=32)
     model = model.to(device)
-    optimizer = optim.Adam(model.parameters(), lr=0.001, betas=(0.9, 0.999))
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
 
     best_val_acc = float('inf')  
 
@@ -330,7 +338,7 @@ if __name__ == '__main__':
 
     file_name = f"w{WINDOW}_ovr{OVERLAP}_pca{PCA_COMPONENTS}_seed{SEED}_{TASK}"
     model_name = file_name + ".pth"
-    best_model_path = os.path.join(os.getcwd(), "output-milt", model_name)
+    best_model_path = os.path.join(os.getcwd(), "output-caueeg", model_name)
 
     for epoch in range(1, num_epochs + 1):
 
@@ -355,7 +363,7 @@ if __name__ == '__main__':
 
     # Save training history
     history_name = file_name + ".npy"
-    history_file = os.path.join(os.getcwd(), "output-milt", history_name)
+    history_file = os.path.join(os.getcwd(), "output-caueeg", history_name)
     plot_training_history(history, file_name)
     np.save(history_file, history)
 
