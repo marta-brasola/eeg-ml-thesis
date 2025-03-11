@@ -83,8 +83,8 @@ def train(model, device, train_loader, optimizer, epoch):
     
     optimizer.zero_grad()
     age = None
-    output = model(data, age)
-    
+    output = model(data)
+    # output = model(data, age)
 
     target = target.squeeze().long()
 
@@ -128,7 +128,8 @@ def validation(model, device, val_loader):
         
       data, target = data.to(device), target.to(device).squeeze().long()
       age = None
-      output = model(data, age)
+      output = model(data)
+      #output = model(data, age)
       loss = criterion(output, target)
       val_loss += loss.item()
       _, y_pred = torch.max(output,1)
@@ -154,7 +155,8 @@ def test_and_save_confusion_matrix(model, device, loader, file_name):
         for data, target in loader:
             data, target = data.to(device).to(torch.float32), target.to(device).squeeze().long()
             age = None
-            output = model(data, age).float()
+            output = model(data).float()
+            #output = model(data, age).float()
             _, y_pred = torch.max(output, 1)  
             
             pred_list.append(y_pred)
@@ -322,8 +324,8 @@ if __name__ == '__main__':
     window_size = 20      
     dropout_prob = 0.5 
     device = torch.device("cuda")
-    #model = LSTMModel(input_dim, hidden_dim, output_dim, dropout_prob=dropout_prob, use_dense1=False)
-    model = TinyCNN1D(in_channels=50, out_dims=output_dim, fc_stages=5, seq_length=19, use_age="no", base_channels=32)
+    model = LSTMModel(input_dim, hidden_dim, output_dim, dropout_prob=dropout_prob, use_dense1=False)
+    # model = TinyCNN1D(in_channels=50, out_dims=output_dim, fc_stages=5, seq_length=19, use_age="no", base_channels=32)
     model = model.to(device)
     optimizer = optim.Adam(model.parameters(), lr=0.001)
 
